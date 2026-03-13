@@ -1,0 +1,9 @@
+.env
+storage/temp/*
+!storage/temp/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+storage/cache/jobs/*
+!storage/cache/jobs/.gitkeep
+storage/exports/*
+!storage/exports/.gitkeep
