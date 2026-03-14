@@ -1,28 +1,32 @@
-# Architecture
+# Architecture (v2)
 
-## Overview
-het PDF Tools is a modular internal utility platform built for cPanel/shared-hosting constraints.
+## Product Structure
+het Document Platform follows modular enterprise layering while preserving cPanel compatibility.
 
 ## Layers
-- public/: route entrypoints and guarded pages
-- app/Controllers: request orchestration
-- app/Services: validation, tooling, processing, logging
-- app/Core: bootstrap, auth, csrf, response, db
-- app/Models: DB persistence
-- app/Views: UI templates
-- storage/: temp/jobs/logs/exports (non-public)
+- Frontend UI layer: PHP views + JS polling UX
+- Backend API layer: `/public/api/jobs/*`
+- Processing layer: `DocumentProcessorService`
+- Queue layer: `JobQueueModel` + `QueueService`
+- Storage layer: DB `job_files` + private filesystem
+- Admin module: diagnostics, analytics, user governance
 
-## Request Flow
-1. Request enters public route.
-2. Bootstrap starts session, security headers, config.
-3. Auth guard validates session/token.
-4. Controller validates CSRF and input.
-5. Service executes tool pipeline.
-6. Job metadata persisted under storage/cache/jobs.
-7. Signed token download served via download route.
+## Core Runtime Flow
+1. Authenticated user submits tool form
+2. Request stored as queued job in DB
+3. Worker tick claims queued job
+4. Processor runs Ghostscript/ImageMagick pipeline
+5. Progress and stage updated in DB
+6. Output persisted + mapped in `job_files`
+7. User polls status and receives secure download token
 
-## Modularity
-New tools can be added by:
-1. Adding one method in ToolController.
-2. Adding processor logic in ToolboxService.
-3. Adding dashboard card + tool view input block.
+## Compatibility Strategy
+- Current shared hosting: DB queue + poll-triggered tick
+- Future VPS: dedicated worker daemons using same service contracts
+- Future cloud: replace local path adapter with object storage key adapter
+
+## Security Boundaries
+- Auth guard on all tool/admin routes
+- Per-user ownership checks in queue/download path
+- CSRF checks on state-changing requests
+- Signed, expiring download tokens

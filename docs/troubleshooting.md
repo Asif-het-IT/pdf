@@ -1,27 +1,27 @@
-# Troubleshooting
+# Troubleshooting (v2)
 
-## Login Fails Repeatedly
-- Check credentials.
-- Verify account is_active=1.
-- Wait for brute-force cooldown if too many attempts.
+## Job stuck on queued
+- Run `php scripts/worker.php 5`
+- Confirm cron is configured
+- Check DB table `jobs` and app log
 
-## Tool Fails
-- Open /status.php and confirm binary availability.
-- Ensure storage directories are writable.
-- Check storage/logs/app.log for specific error.
+## Progress not moving
+- Verify `/api/jobs/status.php` is reachable
+- Check PHP `proc_open` is enabled
+- Check binary paths in `.env`
 
-## No Download
-- Token may be expired.
-- File may have been cleaned by retention job.
+## Tool failed with binary error
+- Open `/admin.php` and verify Binary Availability
+- Confirm `/bin/gs` and `/bin/convert` permissions
 
-## OCR Poor Quality
-- Use higher resolution, clean, high-contrast image.
-- OCR currently defaults to English language model.
+## Download fails
+- Token expired: re-open job status and generate fresh token
+- Output cleaned by retention: verify `expires_at` in `job_files`
 
-## Stamp/Signature Issues
-- Requires convert + qpdf binaries.
-- If unavailable, feature gracefully fails with clear message.
+## DB migration errors
+- Run `php scripts/migrate.php`
+- Check DB user has CREATE/ALTER privileges
 
-## Edit Text Expectations
-- Full native text editing with exact font/layout preservation is not dependable across all PDF structures.
-- Current v1 workflow is controlled and transparent by design.
+## OCR outputs weak text
+- Use clean, high-contrast input
+- Ensure tesseract is installed for OCR-heavy tools

@@ -1,34 +1,33 @@
-# Security Guide
+# Security Guide (v2)
 
-## Access Control
-- Login required for dashboard and all tools.
-- Role-aware model supports admin and team_user.
-- Admin page restricted to admin role.
+## Authentication and Authorization
+- Session-based authentication on all protected pages
+- Role checks for admin endpoints
+- User-bound ownership checks for job status/download APIs
 
-## Session Security
-- HttpOnly + SameSite cookies.
-- Session ID rotation on login.
-- Inactivity timeout enforced.
-- IP + User-Agent session binding.
+## CSRF and Session Hardening
+- CSRF token validated for login and create-user/job actions
+- HttpOnly + SameSite cookies
+- Session rotation on login
+- Idle timeout + IP/UA binding
 
-## Input Safety
-- CSRF token required on login and tool actions.
-- MIME + extension + PDF signature checks.
-- Filename sanitization.
-- Upload size restrictions.
+## Upload and Processing Security
+- Input validation per tool flow
+- Isolated per-user working directories
+- No direct public links to private storage
+- Signed, expiring download tokens
 
-## File Safety
-- Isolated per-job working directory.
-- Raw storage paths never exposed publicly.
-- Download requires signed expiring token.
-- Script execution blocked in storage via .htaccess.
+## Rate Limiting and Abuse Controls
+- Login rate limiting enabled
+- Queue tick is limited by batch size
+- Failed jobs are logged for diagnostics
 
-## Abuse Protection
-- Login brute-force rate limiter.
-- Tool endpoint rate control strategy available in service layer.
+## Audit and Logging
+- Application log captures queue lifecycle and errors
+- Audit table available for governance expansions
 
-## Hardening Recommendations
-- Enable IP allowlist at webserver level for internal-only access.
-- Use HTTPS only.
-- Rotate HET_APP_KEY regularly.
-- Keep binaries patched.
+## Recommended Hardening
+1. HTTPS-only with HSTS
+2. Restrict admin URLs by office IP at server level when possible
+3. Rotate `HET_APP_KEY` and admin credentials periodically
+4. Keep GS/ImageMagick binaries patched

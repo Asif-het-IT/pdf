@@ -24,7 +24,8 @@ final class Database
             self::$instance = new PDO($dsn, $db['user'], $db['pass'], [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_EMULATE_PREPARES => true,
+                PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
             ]);
         } catch (PDOException $e) {
             throw new \RuntimeException('Database connection failed: ' . $e->getMessage());

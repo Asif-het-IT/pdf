@@ -105,7 +105,8 @@ final class ToolController
 
         $res = $this->toolbox->compressPdf($in, $out, $profile);
         if (!$res['ok']) {
-            return ['ok' => false, 'message' => 'Compression failed: ' . ($res['error'] ?? 'unknown')];
+            $detail = $res['error'] ?? ($res['stderr'] ?? ($res['stdout'] ?? 'unknown'));
+            return ['ok' => false, 'message' => 'Compression failed: ' . ($detail ?: 'no output captured')];
         }
 
         $inSize = (int) filesize($in);
@@ -143,7 +144,8 @@ final class ToolController
 
         $conv = $this->toolbox->pdfToPng($in, $pngDir);
         if (!$conv['ok']) {
-            return ['ok' => false, 'message' => 'PDF to PNG failed: ' . ($conv['error'] ?? 'unknown')];
+            $detail = $conv['error'] ?? ($conv['stderr'] ?? ($conv['stdout'] ?? 'unknown'));
+            return ['ok' => false, 'message' => 'PDF to PNG failed: ' . ($detail ?: 'no output captured')];
         }
 
         $zip = $job['work_dir'] . DIRECTORY_SEPARATOR . 'pages.zip';
@@ -187,7 +189,8 @@ final class ToolController
         $res = $this->toolbox->imagesToPdf($collected, $out);
 
         if (!$res['ok']) {
-            return ['ok' => false, 'message' => 'Image to PDF failed: ' . ($res['error'] ?? 'unknown')];
+            $detail = $res['error'] ?? ($res['stderr'] ?? ($res['stdout'] ?? 'unknown'));
+            return ['ok' => false, 'message' => 'Image to PDF failed: ' . ($detail ?: 'no output captured')];
         }
 
         return ['ok' => true, 'output_path' => $out, 'output_type' => 'pdf', 'metrics' => ['images' => count($collected)]];
@@ -259,7 +262,8 @@ final class ToolController
 
         $res = $this->toolbox->applyStampOrSignature($in, $overlay, $out);
         if (!$res['ok']) {
-            return ['ok' => false, 'message' => ucfirst($type) . ' process failed: ' . ($res['error'] ?? 'unknown')];
+            $detail = $res['error'] ?? ($res['stderr'] ?? ($res['stdout'] ?? 'unknown'));
+            return ['ok' => false, 'message' => ucfirst($type) . ' process failed: ' . ($detail ?: 'no output captured')];
         }
 
         return ['ok' => true, 'output_path' => $out, 'output_type' => 'pdf', 'metrics' => ['mode' => $type]];

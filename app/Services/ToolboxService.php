@@ -161,7 +161,7 @@ final class ToolboxService
 
         $proc = proc_open($command, $descriptors, $pipes);
         if (!is_resource($proc)) {
-            return ['ok' => false, 'error' => 'Process start failed'];
+            return ['ok' => false, 'error' => 'Process start failed (proc_open unavailable or invalid command)'];
         }
 
         fclose($pipes[0]);
@@ -171,11 +171,19 @@ final class ToolboxService
         $out = '';
         $err = '';
         $start = time();
+        $timedOut = false;
 
         while (true) {
             $status = proc_get_status($proc);
-            $out .= stream_get_contents($pipes[1]);
-            $err .= stream_get_contents($pipes[2]);
+
+            $chunk = stream_get_contents($pipes[1]);
+            if ($chunk !== false) {
+                $out .= $chunk;
+            }
+            $chunk = stream_get_contents($pipes[2]);
+            if ($chunk !== false) {
+                $err .= $chunk;
+            }
 
             if (!$status['running']) {
                 break;
@@ -183,23 +191,42 @@ final class ToolboxService
 
             if ((time() - $start) > $this->timeoutSeconds) {
                 proc_terminate($proc, 9);
-                $err .= 'Timed out';
+                $timedOut = true;
                 break;
             }
 
             usleep(100000);
         }
 
+        // Final drain — switch to blocking so any unflushed output is captured.
+        stream_set_blocking($pipes[1], true);
+        stream_set_blocking($pipes[2], true);
+        $chunk = stream_get_contents($pipes[1]);
+        if ($chunk !== false) {
+            $out .= $chunk;
+        }
+        $chunk = stream_get_contents($pipes[2]);
+        if ($chunk !== false) {
+            $err .= $chunk;
+        }
+
         fclose($pipes[1]);
         fclose($pipes[2]);
         $exit = proc_close($proc);
+
+        if ($timedOut) {
+            return ['ok' => false, 'error' => 'Process timed out after ' . $this->timeoutSeconds . 's', 'stdout' => trim($out), 'stderr' => trim($err), 'exit' => -1];
+        }
+
+        // Use stderr first, then stdout, then exit code as last-resort detail.
+        $errorDetail = trim($err) ?: (trim($out) ?: ('Exit code ' . $exit));
 
         return [
             'ok' => $exit === 0,
             'stdout' => trim($out),
             'stderr' => trim($err),
             'exit' => $exit,
-            'error' => $exit === 0 ? null : trim($err),
+            'error' => $exit === 0 ? null : $errorDetail,
         ];
     }
 }

@@ -4,18 +4,35 @@ declare(strict_types=1);
 
 $basePath = dirname(__DIR__, 2);
 
+$env = static function (string $key, mixed $default = ''): mixed {
+    if (array_key_exists($key, $_ENV)) {
+        return $_ENV[$key];
+    }
+
+    if (array_key_exists($key, $_SERVER)) {
+        return $_SERVER[$key];
+    }
+
+    $value = getenv($key);
+    if ($value !== false) {
+        return $value;
+    }
+
+    return $default;
+};
+
 return [
-    'app_name' => 'het PDF Tools',
-    'app_version' => '1.0.0',
-    'base_url' => getenv('HET_BASE_URL') ?: '',
+    'app_name' => 'het Document Platform',
+    'app_version' => '2.0.0',
+    'base_url' => (string) $env('HET_BASE_URL', ''),
     'timezone' => 'Asia/Dubai',
-    'app_key' => getenv('HET_APP_KEY') ?: hash('sha256', $basePath . '|het-pdf-tools'),
+    'app_key' => (string) $env('HET_APP_KEY', hash('sha256', $basePath . '|het-pdf-tools')),
     'database' => [
-        'host' => getenv('HET_DB_HOST') ?: 'localhost',
-        'port' => (int) (getenv('HET_DB_PORT') ?: 3306),
-        'name' => getenv('HET_DB_NAME') ?: 'hetdubai_pdf_tools',
-        'user' => getenv('HET_DB_USER') ?: 'hetdubai_pdf_tools',
-        'pass' => getenv('HET_DB_PASS') ?: '',
+        'host' => (string) $env('HET_DB_HOST', 'localhost'),
+        'port' => (int) $env('HET_DB_PORT', 3306),
+        'name' => (string) $env('HET_DB_NAME', 'hetdubai_pdf_tools'),
+        'user' => (string) $env('HET_DB_USER', 'hetdubai_pdf_tools'),
+        'pass' => (string) $env('HET_DB_PASS', ''),
     ],
     'session' => [
         'idle_timeout_seconds' => 1800,
@@ -42,19 +59,20 @@ return [
     'jobs' => [
         'max_runtime_seconds' => 120,
         'token_ttl_seconds' => 900,
-        'retention_seconds' => 3600,
+        'retention_seconds' => 2592000,
         'max_parallel_per_ip' => 3,
+        'queue_tick_batch' => 3,
     ],
     'rate_limit' => [
         'window_seconds' => 60,
         'max_requests' => 20,
     ],
     'binaries' => [
-        'ghostscript' => getenv('HET_GS_BIN') ?: 'gs',
-        'qpdf' => getenv('HET_QPDF_BIN') ?: 'qpdf',
-        'tesseract' => getenv('HET_TESSERACT_BIN') ?: 'tesseract',
-        'convert' => getenv('HET_CONVERT_BIN') ?: 'convert',
-        'img2pdf' => getenv('HET_IMG2PDF_BIN') ?: 'img2pdf',
+        'ghostscript' => (string) $env('HET_GS_BIN', 'gs'),
+        'qpdf' => (string) $env('HET_QPDF_BIN', 'qpdf'),
+        'tesseract' => (string) $env('HET_TESSERACT_BIN', 'tesseract'),
+        'convert' => (string) $env('HET_CONVERT_BIN', 'convert'),
+        'img2pdf' => (string) $env('HET_IMG2PDF_BIN', 'img2pdf'),
     ],
     'compression_profiles' => [
         'high_quality' => [

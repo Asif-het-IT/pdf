@@ -1,21 +1,29 @@
-# User Guide
+# User Guide (v2)
 
 ## Login
-1. Open /login.php
-2. Sign in with team credentials.
+1. Open `/login.php`
+2. Sign in with company credentials
 
-## Dashboard
-- Use tool cards to select workflow.
-- Recent jobs show latest activity.
+## Dashboard / Portal
+- Tool catalog grouped by category
+- Recent queue jobs with stage and progress
+- Download center with retained outputs
 
-## Tool Workflows
-- Compress PDF: upload PDF, choose mode, download result.
-- PDF to PNG: upload PDF, receive ZIP of page PNGs.
-- PNG/JPG to PDF: upload multiple images, receive combined PDF.
-- Image OCR: upload image, receive text file and preview.
-- Add Stamp/Signature: upload PDF + image overlay, download processed PDF.
-- Edit PDF Text: controlled overlay-safe mode with limitation notice.
+## Processing Experience
+1. Open tool page
+2. Upload file(s)
+3. Click `Queue Job`
+4. Live status stages appear:
+	- queued
+	- validating
+	- processing
+	- finalizing
+	- completed/failed
+5. Download when completed
 
-## Data Retention
-- Files are temporary and auto-cleaned by scheduled task.
-- Avoid uploading highly sensitive files unless policy allows.
+## Retention
+- Output files retained for 30 days
+- Re-download from portal while retention is active
+
+## Notes on Tool Availability
+Some enterprise conversions require additional binaries on server (LibreOffice/qpdf/tesseract/poppler). Those tools are cataloged but execution depends on environment readiness.

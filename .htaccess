@@ -4,6 +4,11 @@ ServerSignature Off
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Do not rewrite real files/folders (needed for /scripts/install.php and assets)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
     # Route everything through public/ when project root is docroot
     RewriteCond %{REQUEST_URI} !^/public/
     RewriteRule ^(.*)$ public/$1 [L]

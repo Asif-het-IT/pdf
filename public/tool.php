@@ -11,6 +11,7 @@ use App\Services\ArchiveService;
 use App\Services\FileValidator;
 use App\Services\JobService;
 use App\Services\Logger;
+use App\Services\ToolCatalogService;
 use App\Services\ToolDetector;
 use App\Services\ToolboxService;
 
@@ -44,8 +45,8 @@ $controller = new ToolController(
 );
 
 $name = (string) ($_GET['name'] ?? 'compress');
-$allowed = ['compress', 'pdf-to-png', 'png-to-pdf', 'jpg-to-pdf', 'image-ocr', 'add-stamp', 'add-signature', 'edit-pdf-text'];
-if (!in_array($name, $allowed, true)) {
+$toolDef = (new ToolCatalogService())->find($name);
+if (!is_array($toolDef)) {
     http_response_code(404);
     echo 'Tool not found';
     exit;

@@ -1,27 +1,46 @@
-# het PDF Tools
+# het Document Platform (v2)
 
-Enterprise-grade internal PDF utility platform for team-only use on cPanel/shared hosting.
+Internal enterprise SaaS-style document processing platform for `pdf.hetdubai.com`.
 
-## Key Capabilities
-- Team authentication (admin + team_user role-ready)
-- Tool dashboard with modular architecture
-- PDF compress, PDF to PNG, PNG/JPG to PDF, OCR, stamp, signature
-- Controlled PDF text edit workflow with transparent limitations
-- Tokenized secure downloads + isolated temporary jobs
-- Admin diagnostics + cleanup automation
+## Highlights
+- Existing login/database compatibility preserved
+- 20+ tool catalog with modular execution layer
+- Async queue pipeline (DB-backed, cPanel-friendly fallback)
+- Live progress stages and percentage updates
+- User portal: job history + retained files
+- Admin panel: diagnostics, analytics, and user management
+- 30-day output retention with cleanup automation
 
-## Quick Start
-1. Configure subdomain document root to public/.
-2. Set env values from .env.example in cPanel.
-3. Import database/schema.sql and database/seed.sql.
-4. Run scripts/install.php once.
-5. Login via /login.php and rotate default password.
+## Current Compatible Stack
+- PHP 8+
+- MariaDB / MySQL
+- cPanel / LiteSpeed shared hosting
+- Ghostscript and ImageMagick available
+
+## Upgrade Steps (FTP-safe)
+1. Upload/replace full project files in `/home/hetdubai/pdf`
+2. Ensure `.env` values are correct
+3. Run once:
+	- `https://pdf.hetdubai.com/scripts/install.php`
+	- or `php scripts/migrate.php`
+4. Setup cron:
+	- `php /home/hetdubai/pdf/scripts/worker.php 5`
+5. Login at `/login.php`
+
+## Main Endpoints
+- Dashboard: `/dashboard.php`
+- Tool runner UI: `/tool.php?name=compress`
+- Admin dashboard: `/admin.php`
+- Admin users: `/admin-users.php`
+- Job API: `/api/jobs/*`
 
 ## Documentation
-- docs/deployment.md
-- docs/architecture.md
-- docs/security.md
-- docs/admin-guide.md
-- docs/user-guide.md
-- docs/troubleshooting.md
-- docs/release-notes.md
+- `docs/deployment.md`
+- `docs/architecture.md`
+- `docs/admin-guide.md`
+- `docs/user-guide.md`
+- `docs/security.md`
+- `docs/queue-architecture.md`
+- `docs/storage-retention.md`
+- `docs/troubleshooting.md`
+- `docs/release-notes.md`

@@ -6,6 +6,8 @@ use App\Controllers\AdminController;
 use App\Core\Auth;
 use App\Core\Bootstrap;
 use App\Core\Database;
+use App\Models\JobFileModel;
+use App\Models\JobQueueModel;
 use App\Models\UserModel;
 use App\Services\JobService;
 use App\Services\ToolDetector;
@@ -37,7 +39,10 @@ $controller = new AdminController(
         $config['jobs']['token_ttl_seconds'],
         $config['jobs']['retention_seconds']
     ),
-    new ToolDetector($config['binaries'])
+    new ToolDetector($config['binaries']),
+    new JobQueueModel($db),
+    new JobFileModel($db),
+    new UserModel($db)
 );
 
 $controller->index();

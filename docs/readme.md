@@ -8,6 +8,8 @@ Use these documents for operations and handover:
 - security.md
 - admin-guide.md
 - user-guide.md
+- queue-architecture.md
+- storage-retention.md
 - troubleshooting.md
 - release-notes.md
 
