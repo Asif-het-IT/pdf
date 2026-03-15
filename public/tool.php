@@ -45,11 +45,12 @@ $controller = new ToolController(
 );
 
 $name = (string) ($_GET['name'] ?? 'compress');
-$toolDef = (new ToolCatalogService())->find($name);
+$catalog = new ToolCatalogService();
+$toolDef = $catalog->findWithCapabilities($name, $tools);
 if (!is_array($toolDef)) {
     http_response_code(404);
     echo 'Tool not found';
     exit;
 }
 
-$controller->page($name);
+$controller->page($name, $toolDef);

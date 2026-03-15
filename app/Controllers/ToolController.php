@@ -24,11 +24,12 @@ final class ToolController
     ) {
     }
 
-    public function page(string $tool): void
+    public function page(string $tool, ?array $toolMeta = null): void
     {
         $user = $this->auth->user();
         $csrf = Csrf::token();
         $toolName = $tool;
+        $toolDef = $toolMeta ?? ['available' => true, 'availability_message' => 'Ready'];
         $view = dirname(__DIR__) . '/Views/tools/tool.php';
         require $view;
     }

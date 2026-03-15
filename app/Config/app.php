@@ -73,6 +73,8 @@ return [
         'tesseract' => (string) $env('HET_TESSERACT_BIN', 'tesseract'),
         'convert' => (string) $env('HET_CONVERT_BIN', 'convert'),
         'img2pdf' => (string) $env('HET_IMG2PDF_BIN', 'img2pdf'),
+        'pdfinfo' => (string) $env('HET_PDFINFO_BIN', 'pdfinfo'),
+        'soffice' => (string) $env('HET_SOFFICE_BIN', 'soffice'),
     ],
     'compression_profiles' => [
         'high_quality' => [

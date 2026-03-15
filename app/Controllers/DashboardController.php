@@ -16,7 +16,8 @@ final class DashboardController
         private readonly Auth $auth,
         private readonly QueueService $queue,
         private readonly ToolCatalogService $catalog,
-        private readonly JobFileModel $files
+        private readonly JobFileModel $files,
+        private readonly array $detectedTools = []
     )
     {
     }
@@ -37,7 +38,7 @@ final class DashboardController
             }
         }
         unset($file);
-        $toolGroups = $this->catalog->grouped();
+        $toolGroups = $this->catalog->groupedWithCapabilities($this->detectedTools);
         $candidates = [
             dirname(__DIR__) . '/Views/dashboard/index.php',
             dirname(__DIR__) . '/views/dashboard/index.php',

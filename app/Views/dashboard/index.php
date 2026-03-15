@@ -30,14 +30,20 @@
             <div class="row g-3">
                 <?php foreach ($tools as $tool): ?>
                     <div class="col-md-6 col-xl-3">
-                        <a class="card panel h-100 text-decoration-none p-3" href="/tool.php?name=<?= e((string) $tool['key']) ?>">
-                            <h3 class="h6 mb-1"><?= e((string) $tool['title']) ?></h3>
-                            <?php if (($tool['implemented'] ?? false) === true): ?>
-                                <p class="small text-success mb-0">Ready in v2</p>
-                            <?php else: ?>
-                                <p class="small text-muted mb-0">Architecture ready, binary dependent</p>
-                            <?php endif; ?>
-                        </a>
+                        <?php if (($tool['available'] ?? false) === true): ?>
+                            <a class="card panel h-100 text-decoration-none p-3" href="/tool.php?name=<?= e((string) $tool['key']) ?>">
+                                <h3 class="h6 mb-1"><?= e((string) $tool['title']) ?></h3>
+                                <p class="small text-success mb-0">Ready</p>
+                            </a>
+                        <?php else: ?>
+                            <div class="card panel h-100 p-3 opacity-75">
+                                <h3 class="h6 mb-1"><?= e((string) $tool['title']) ?></h3>
+                                <p class="small text-muted mb-1"><?= e((string) ($tool['availability_message'] ?? 'Unavailable')) ?></p>
+                                <?php if (!empty($tool['missing_binaries']) && is_array($tool['missing_binaries'])): ?>
+                                    <p class="small text-danger mb-0">Missing: <?= e(implode(', ', $tool['missing_binaries'])) ?></p>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>

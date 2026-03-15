@@ -36,22 +36,22 @@ if (!Csrf::validate($_POST['_csrf'] ?? null)) {
 
 $toolKey = (string) ($_GET['name'] ?? '');
 $catalog = new ToolCatalogService();
-$tool = $catalog->find($toolKey);
+$tools = (new ToolDetector($config['binaries']))->detectAll();
+$tool = $catalog->findWithCapabilities($toolKey, $tools);
 if (!is_array($tool)) {
     Response::json(['ok' => false, 'message' => 'Unknown tool'], 404);
 }
 
-if (($tool['implemented'] ?? false) !== true) {
+if (($tool['available'] ?? false) !== true) {
     Response::json([
         'ok' => false,
-        'message' => 'Yeh tool architecture me ready hai lekin current server binaries par abhi executable nahi hai.',
+        'message' => (string) ($tool['availability_message'] ?? 'Tool unavailable on current hosting stack'),
     ], 422);
 }
 
 $user = $auth->user();
 $userId = (int) ($user['id'] ?? 0);
 
-$tools = (new ToolDetector($config['binaries']))->detectAll();
 $queue = new QueueService(
     $config,
     new JobQueueModel($db),

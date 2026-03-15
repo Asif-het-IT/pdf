@@ -23,6 +23,14 @@
     </div>
 
     <div class="card panel p-4">
+        <?php if (($toolDef['available'] ?? true) !== true): ?>
+            <div class="alert alert-warning">
+                <?= e((string) ($toolDef['availability_message'] ?? 'Yeh tool current server stack par available nahi hai.')) ?>
+                <?php if (!empty($toolDef['missing_binaries']) && is_array($toolDef['missing_binaries'])): ?>
+                    <br><small>Missing binaries: <?= e(implode(', ', $toolDef['missing_binaries'])) ?></small>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
         <form id="toolForm" method="post" enctype="multipart/form-data" action="/api/jobs/create.php?name=<?= e($toolName) ?>">
             <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
             <input type="hidden" name="tool_key" value="<?= e($toolName) ?>">
@@ -54,11 +62,19 @@
                 </div>
             <?php endif; ?>
 
-            <?php if (in_array($toolName, ['split-pdf', 'extract-pages', 'organize-pdf'], true)): ?>
+            <?php if (in_array($toolName, ['split-pdf', 'extract-pages'], true)): ?>
                 <div class="mb-3">
                     <label class="form-label">Page Ranges</label>
                     <input type="text" class="form-control" name="ranges" placeholder="1-3,5,9-10" required>
                     <div class="form-text">Example: 1-3,5,9-10</div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($toolName === 'organize-pdf'): ?>
+                <div class="mb-3">
+                    <label class="form-label">Page Order</label>
+                    <input type="text" class="form-control" name="page_order" placeholder="5,1,2,4,3" required>
+                    <div class="form-text">Comma-separated page sequence dein. Example: 5,1,2,4,3</div>
                 </div>
             <?php endif; ?>
 
@@ -107,7 +123,7 @@
                 </div>
             <?php endif; ?>
 
-            <button class="btn btn-primary" type="submit">Queue Job</button>
+            <button class="btn btn-primary" type="submit" <?= (($toolDef['available'] ?? true) !== true) ? 'disabled' : '' ?>>Queue Job</button>
         </form>
 
         <div id="result" class="mt-4 d-none"></div>

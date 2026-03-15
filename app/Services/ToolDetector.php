@@ -18,6 +18,8 @@ final class ToolDetector
             'tesseract' => $this->resolveBinary($this->binaryConfig['tesseract'] ?? ''),
             'convert' => $this->resolveBinary($this->binaryConfig['convert'] ?? ''),
             'img2pdf' => $this->resolveBinary($this->binaryConfig['img2pdf'] ?? ''),
+            'pdfinfo' => $this->resolveBinary($this->binaryConfig['pdfinfo'] ?? ''),
+            'soffice' => $this->resolveBinary($this->binaryConfig['soffice'] ?? ''),
         ];
     }
 
@@ -31,6 +33,18 @@ final class ToolDetector
 
         $escaped = escapeshellarg($candidate);
         $path = trim((string) @shell_exec("command -v {$escaped} 2>/dev/null"));
+        if ($path === '') {
+            $path = trim((string) @shell_exec("which {$escaped} 2>/dev/null"));
+        }
+        if ($path === '' && stripos(PHP_OS_FAMILY, 'Windows') !== false) {
+            $winWhere = @shell_exec('where ' . escapeshellarg($candidate) . ' 2>nul');
+            if (is_string($winWhere) && trim($winWhere) !== '') {
+                $parts = preg_split('/\r\n|\r|\n/', trim($winWhere));
+                if (is_array($parts) && isset($parts[0])) {
+                    $path = trim((string) $parts[0]);
+                }
+            }
+        }
         if ($path === '') {
             if (is_file($candidate) && is_executable($candidate)) {
                 $path = $candidate;

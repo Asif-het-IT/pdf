@@ -41,7 +41,8 @@ try {
         $auth,
         $queue,
         new ToolCatalogService(),
-        new JobFileModel($db)
+        new JobFileModel($db),
+        $tools
     );
     $controller->index();
 } catch (\Throwable $e) {

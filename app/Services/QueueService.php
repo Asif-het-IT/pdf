@@ -82,7 +82,17 @@ final class QueueService
             $input = is_array($inputMeta['input'] ?? null) ? $inputMeta['input'] : [];
             $workDir = (string) ($inputMeta['work_dir'] ?? '');
 
+            $pdfPath = (string) ($input['pdf'] ?? '');
+            if ($pdfPath !== '' && is_file($pdfPath)) {
+                $this->logger->info('Input PDF inspection', [
+                    'job_uuid' => $jobUuid,
+                    'tool' => (string) ($job['tool_key'] ?? ''),
+                    'inspection' => $this->processor->inspectPdf($pdfPath),
+                ]);
+            }
+
             $this->jobs->updateStage($jobUuid, 'processing', 55);
+            $this->logger->info('Job processing started', ['job_uuid' => $jobUuid, 'tool' => (string) ($job['tool_key'] ?? '')]);
             $result = $this->processor->process((string) $job['tool_key'], $input, $workDir);
 
             if (!($result['ok'] ?? false)) {
@@ -93,6 +103,7 @@ final class QueueService
             $this->jobs->updateStage($jobUuid, 'finalizing', 88);
 
             $outputPath = (string) ($result['output_path'] ?? '');
+            $outputPath = $this->applyOutputNaming((string) ($job['tool_key'] ?? ''), $input, $result, $outputPath);
             $relative = $this->toRelativeStoragePath($outputPath);
 
             $this->jobs->complete($jobUuid, [
@@ -100,6 +111,8 @@ final class QueueService
                 'relative_path' => $relative,
                 'mime' => (string) ($result['mime'] ?? 'application/octet-stream'),
                 'output_type' => (string) ($result['output_type'] ?? 'file'),
+                'metrics' => is_array($result['metrics'] ?? null) ? $result['metrics'] : [],
+                'note' => (string) ($result['note'] ?? ''),
             ]);
 
             $fresh = $this->jobs->findByUuid($jobUuid);
@@ -116,7 +129,13 @@ final class QueueService
                 ]);
             }
 
-            $this->logger->info('Job completed', ['job_uuid' => $jobUuid]);
+            $this->logger->info('Job completed', [
+                'job_uuid' => $jobUuid,
+                'tool' => (string) ($job['tool_key'] ?? ''),
+                'output' => basename($outputPath),
+                'metrics' => is_array($result['metrics'] ?? null) ? $result['metrics'] : [],
+                'note' => (string) ($result['note'] ?? ''),
+            ]);
         } catch (\Throwable $e) {
             $this->jobs->fail($jobUuid, $e->getMessage());
             $this->logger->error('Job failed', ['job_uuid' => $jobUuid, 'error' => $e->getMessage()]);
@@ -231,6 +250,7 @@ final class QueueService
                 $target = $workDir . DIRECTORY_SEPARATOR . sprintf('merge_%03d.pdf', $i + 1);
                 move_uploaded_file((string) $tmp, $target);
                 $input['pdfs'][] = $target;
+                $input['source_names'][] = (string) ($set['name'][$i] ?? ('merge_' . ($i + 1) . '.pdf'));
             }
             if (count($input['pdfs']) < 2) {
                 throw new \RuntimeException('At least 2 PDFs required for merge');
@@ -253,6 +273,7 @@ final class QueueService
                 $target = $workDir . DIRECTORY_SEPARATOR . sprintf('img_%03d.%s', $i + 1, $ext !== '' ? $ext : 'png');
                 move_uploaded_file((string) $tmp, $target);
                 $input['images'][] = $target;
+                $input['source_names'][] = (string) ($set['name'][$i] ?? ('image_' . ($i + 1) . '.png'));
             }
             if (count($input['images']) === 0) {
                 throw new \RuntimeException('No valid image uploaded');
@@ -270,6 +291,7 @@ final class QueueService
             $target = $workDir . DIRECTORY_SEPARATOR . 'ocr.' . ($ext !== '' ? $ext : 'png');
             move_uploaded_file($tmp, $target);
             $input['image'] = $target;
+            $input['source_name'] = (string) ($files['image']['name'] ?? 'ocr-image.png');
             return $input;
         }
 
@@ -280,9 +302,13 @@ final class QueueService
         $pdfPath = $workDir . DIRECTORY_SEPARATOR . 'input.pdf';
         move_uploaded_file($pdfTmp, $pdfPath);
         $input['pdf'] = $pdfPath;
+        $input['source_name'] = (string) ($files['pdf']['name'] ?? 'document.pdf');
 
         if (isset($post['ranges'])) {
             $input['ranges'] = (string) $post['ranges'];
+        }
+        if (isset($post['page_order'])) {
+            $input['page_order'] = (string) $post['page_order'];
         }
         if (isset($post['delete_ranges'])) {
             $input['delete_ranges'] = (string) $post['delete_ranges'];
@@ -305,5 +331,82 @@ final class QueueService
         }
 
         return ltrim($absPath, DIRECTORY_SEPARATOR);
+    }
+
+    private function applyOutputNaming(string $toolKey, array $input, array $result, string $outputPath): string
+    {
+        if ($outputPath === '' || !is_file($outputPath)) {
+            return $outputPath;
+        }
+
+        $ext = strtolower((string) pathinfo($outputPath, PATHINFO_EXTENSION));
+        $baseName = $this->pickSourceBaseName($input);
+        $suffix = $this->toolSuffix($toolKey, $input);
+        $stamp = date('h-iA_d-M-y');
+        $newName = $baseName . '_' . $suffix . '_' . $stamp . ($ext !== '' ? ('.' . $ext) : '');
+
+        $target = dirname($outputPath) . DIRECTORY_SEPARATOR . $newName;
+        if ($target === $outputPath) {
+            return $outputPath;
+        }
+
+        if (!@rename($outputPath, $target)) {
+            return $outputPath;
+        }
+
+        return $target;
+    }
+
+    private function pickSourceBaseName(array $input): string
+    {
+        $candidate = '';
+        if (is_string($input['source_name'] ?? null)) {
+            $candidate = (string) $input['source_name'];
+        } elseif (is_array($input['source_names'] ?? null) && isset($input['source_names'][0])) {
+            $candidate = (string) $input['source_names'][0];
+        }
+
+        $base = pathinfo($candidate, PATHINFO_FILENAME);
+        if ($base === '') {
+            $base = 'document';
+        }
+
+        $base = preg_replace('/[^a-zA-Z0-9]+/', '_', $base) ?? 'document';
+        $base = trim($base, '_');
+
+        return $base !== '' ? $base : 'document';
+    }
+
+    private function toolSuffix(string $toolKey, array $input): string
+    {
+        return match ($toolKey) {
+            'compress' => 'compressed_' . $this->compressionModeLabel((string) ($input['mode'] ?? 'balanced')),
+            'merge-pdf' => 'merged',
+            'split-pdf' => 'split',
+            'extract-pages' => 'extracted-pages',
+            'delete-pages' => 'deleted-pages',
+            'organize-pdf' => 'organized-pages',
+            'rotate-pdf' => 'rotated-' . (int) ($input['degrees'] ?? 90),
+            'protect-pdf' => 'protected',
+            'unlock-pdf' => 'unlocked',
+            'repair-pdf' => 'repaired',
+            'pdf-to-jpg' => 'pdf-to-jpg',
+            'pdf-to-png' => 'pdf-to-png',
+            'pdf-to-text' => 'pdf-to-text',
+            'jpg-to-pdf' => 'jpg-to-pdf',
+            'png-to-pdf' => 'png-to-pdf',
+            'image-to-pdf' => 'image-to-pdf',
+            'image-ocr' => 'image-ocr',
+            default => str_replace('_', '-', $toolKey),
+        };
+    }
+
+    private function compressionModeLabel(string $mode): string
+    {
+        return match ($mode) {
+            'high_quality' => 'highquality',
+            'maximum' => 'maximumcompression',
+            default => 'balanced',
+        };
     }
 }

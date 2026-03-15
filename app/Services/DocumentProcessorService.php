@@ -10,6 +10,20 @@ final class DocumentProcessorService
     {
     }
 
+    public function inspectPdf(string $pdf): array
+    {
+        if ($pdf === '' || !is_file($pdf)) {
+            return ['ok' => false, 'error' => 'PDF not found'];
+        }
+
+        return [
+            'ok' => true,
+            'size_bytes' => (int) filesize($pdf),
+            'page_count' => $this->pageCount($pdf),
+            'encrypted' => $this->isPdfEncrypted($pdf),
+        ];
+    }
+
     public function process(string $toolKey, array $input, string $workDir): array
     {
         return match ($toolKey) {
@@ -20,7 +34,7 @@ final class DocumentProcessorService
             'split-pdf' => $this->splitPdf($input['pdf'] ?? '', (string) ($input['ranges'] ?? '1'), $workDir),
             'extract-pages' => $this->splitPdf($input['pdf'] ?? '', (string) ($input['ranges'] ?? '1'), $workDir),
             'delete-pages' => $this->deletePages($input['pdf'] ?? '', (string) ($input['delete_ranges'] ?? ''), $workDir),
-            'organize-pdf' => $this->splitPdf($input['pdf'] ?? '', (string) ($input['ranges'] ?? '1'), $workDir),
+            'organize-pdf' => $this->organizePdf($input['pdf'] ?? '', (string) ($input['page_order'] ?? ''), $workDir),
             'rotate-pdf' => $this->rotatePdf($input['pdf'] ?? '', (int) ($input['degrees'] ?? 90), $workDir),
             'protect-pdf' => $this->protectPdf($input['pdf'] ?? '', (string) ($input['password'] ?? ''), $workDir),
             'unlock-pdf' => $this->unlockPdf($input['pdf'] ?? '', (string) ($input['password'] ?? ''), $workDir),
@@ -55,7 +69,40 @@ final class DocumentProcessorService
             escapeshellarg($inputPdf),
         ]);
 
-        return $this->finalizeRun($cmd, $output, 'application/pdf');
+        $run = $this->run($cmd);
+        if (!$run['ok']) {
+            return ['ok' => false, 'error' => $run['error'] ?? 'Compression failed'];
+        }
+
+        if (!is_file($output)) {
+            return ['ok' => false, 'error' => 'Expected output file not generated'];
+        }
+
+        $inSize = is_file($inputPdf) ? (int) filesize($inputPdf) : 0;
+        $outSize = is_file($output) ? (int) filesize($output) : 0;
+        $ratio = $inSize > 0 ? round((($inSize - $outSize) / $inSize) * 100, 2) : 0.0;
+        $note = null;
+
+        if ($inSize > 0 && $outSize >= (int) floor($inSize * 0.99)) {
+            @copy($inputPdf, $output);
+            $outSize = is_file($output) ? (int) filesize($output) : $outSize;
+            $ratio = $inSize > 0 ? round((($inSize - $outSize) / $inSize) * 100, 2) : 0.0;
+            $note = 'Compression negligible, original quality preserved, skipping recompression.';
+        }
+
+        return [
+            'ok' => true,
+            'output_path' => $output,
+            'output_type' => 'pdf',
+            'mime' => 'application/pdf',
+            'metrics' => [
+                'original_size' => $inSize,
+                'compressed_size' => $outSize,
+                'reduction_percent' => $ratio,
+                'mode' => $mode,
+            ],
+            'note' => $note,
+        ];
     }
 
     private function mergePdf(array $pdfs, string $workDir): array
@@ -80,6 +127,10 @@ final class DocumentProcessorService
 
     private function splitPdf(string $pdf, string $ranges, string $workDir): array
     {
+        if ($this->isPdfEncrypted($pdf)) {
+            return ['ok' => false, 'error' => 'Encrypted PDF detected. Please unlock before extracting/splitting.'];
+        }
+
         $resultFiles = [];
         $parsed = $this->parseRanges($ranges);
         if (count($parsed) === 0) {
@@ -118,8 +169,67 @@ final class DocumentProcessorService
         return ['ok' => true, 'output_path' => $zip, 'output_type' => 'zip', 'mime' => 'application/zip'];
     }
 
+    private function organizePdf(string $pdf, string $pageOrder, string $workDir): array
+    {
+        if ($this->isPdfEncrypted($pdf)) {
+            return ['ok' => false, 'error' => 'Encrypted PDF detected. Please unlock before organizing.'];
+        }
+
+        $pages = $this->parsePageOrder($pageOrder);
+        if (count($pages) === 0) {
+            return ['ok' => false, 'error' => 'Invalid page order. Example: 5,1,2,4,3'];
+        }
+
+        $total = $this->pageCount($pdf);
+        if ($total <= 0) {
+            return ['ok' => false, 'error' => 'Unable to determine page count'];
+        }
+
+        foreach ($pages as $page) {
+            if ($page < 1 || $page > $total) {
+                return ['ok' => false, 'error' => 'Page order contains out-of-range page: ' . $page];
+            }
+        }
+
+        $chunks = [];
+        foreach ($pages as $idx => $page) {
+            $chunk = $workDir . DIRECTORY_SEPARATOR . sprintf('order_%03d_p%d.pdf', $idx + 1, $page);
+            $cmd = implode(' ', [
+                $this->bin('ghostscript'),
+                '-sDEVICE=pdfwrite',
+                '-dNOPAUSE -dBATCH -dQUIET',
+                '-dFirstPage=' . $page,
+                '-dLastPage=' . $page,
+                '-sOutputFile=' . escapeshellarg($chunk),
+                escapeshellarg($pdf),
+            ]);
+            $run = $this->run($cmd);
+            if (!$run['ok'] || !is_file($chunk)) {
+                return ['ok' => false, 'error' => 'Organize failed while extracting page ' . $page];
+            }
+            $chunks[] = $chunk;
+        }
+
+        $output = $workDir . DIRECTORY_SEPARATOR . 'organized.pdf';
+        $parts = [
+            $this->bin('ghostscript'),
+            '-dBATCH -dNOPAUSE -q',
+            '-sDEVICE=pdfwrite',
+            '-sOutputFile=' . escapeshellarg($output),
+        ];
+        foreach ($chunks as $chunk) {
+            $parts[] = escapeshellarg($chunk);
+        }
+
+        return $this->finalizeRun(implode(' ', $parts), $output, 'application/pdf');
+    }
+
     private function deletePages(string $pdf, string $deleteRanges, string $workDir): array
     {
+        if ($this->isPdfEncrypted($pdf)) {
+            return ['ok' => false, 'error' => 'Encrypted PDF detected. Please unlock before deleting pages.'];
+        }
+
         $count = $this->pageCount($pdf);
         if ($count <= 0) {
             return ['ok' => false, 'error' => 'Unable to determine page count'];
@@ -194,11 +304,11 @@ final class DocumentProcessorService
             $this->bin('ghostscript'),
             '-dBATCH -dNOPAUSE -q',
             '-sDEVICE=pdfwrite',
+            '-sOutputFile=' . escapeshellarg($output),
             '-c',
             escapeshellarg('<</Orientation ' . $orientation . '>> setpagedevice'),
             '-f',
             escapeshellarg($pdf),
-            '-sOutputFile=' . escapeshellarg($output),
         ]);
 
         return $this->finalizeRun($cmd, $output, 'application/pdf');
@@ -211,19 +321,36 @@ final class DocumentProcessorService
         }
 
         $output = $workDir . DIRECTORY_SEPARATOR . 'protected.pdf';
-        $cmd = implode(' ', [
-            $this->bin('ghostscript'),
-            '-sDEVICE=pdfwrite',
-            '-dNOPAUSE -dBATCH -dQUIET',
-            '-sOwnerPassword=' . escapeshellarg($password),
-            '-sUserPassword=' . escapeshellarg($password),
-            '-dEncryptionR=4',
-            '-dKeyLength=128',
-            '-sOutputFile=' . escapeshellarg($output),
-            escapeshellarg($pdf),
-        ]);
+        $attempts = [
+            ['-dEncryptionR=6', '-dKeyLength=256'],
+            ['-dEncryptionR=4', '-dKeyLength=128'],
+            ['-dEncryptionR=3', '-dKeyLength=128'],
+        ];
 
-        return $this->finalizeRun($cmd, $output, 'application/pdf');
+        $lastError = 'Encryption failed';
+        foreach ($attempts as $flags) {
+            $cmd = implode(' ', [
+                $this->bin('ghostscript'),
+                '-sDEVICE=pdfwrite',
+                '-dCompatibilityLevel=1.7',
+                '-dNOPAUSE -dBATCH -dQUIET',
+                '-sOwnerPassword=' . escapeshellarg($password),
+                '-sUserPassword=' . escapeshellarg($password),
+                $flags[0],
+                $flags[1],
+                '-sOutputFile=' . escapeshellarg($output),
+                escapeshellarg($pdf),
+            ]);
+
+            $res = $this->finalizeRun($cmd, $output, 'application/pdf');
+            if (($res['ok'] ?? false) === true) {
+                return $res;
+            }
+
+            $lastError = (string) ($res['error'] ?? $lastError);
+        }
+
+        return ['ok' => false, 'error' => $lastError];
     }
 
     private function unlockPdf(string $pdf, string $password, string $workDir): array
@@ -242,7 +369,17 @@ final class DocumentProcessorService
             escapeshellarg($pdf),
         ]);
 
-        return $this->finalizeRun($cmd, $output, 'application/pdf');
+        $run = $this->finalizeRun($cmd, $output, 'application/pdf');
+        if (($run['ok'] ?? false) === true) {
+            return $run;
+        }
+
+        $error = strtolower((string) ($run['error'] ?? ''));
+        if (str_contains($error, 'password') || str_contains($error, 'invalidfileaccess')) {
+            return ['ok' => false, 'error' => 'Invalid password'];
+        }
+
+        return $run;
     }
 
     private function repairPdf(string $pdf, string $workDir): array
@@ -350,6 +487,14 @@ final class DocumentProcessorService
 
     private function pdfToText(string $pdf, string $workDir): array
     {
+        if (($this->tools['tesseract']['available'] ?? false) !== true) {
+            return ['ok' => false, 'error' => 'OCR engine unavailable on this server'];
+        }
+
+        if ($this->isPdfEncrypted($pdf)) {
+            return ['ok' => false, 'error' => 'Encrypted PDF detected. Please unlock before running OCR.'];
+        }
+
         $img = $this->pdfToImage($pdf, $workDir, 'png16m', 'png');
         if (!$img['ok']) {
             return ['ok' => false, 'error' => $img['error'] ?? 'PDF rasterization failed'];
@@ -470,6 +615,20 @@ final class DocumentProcessorService
         return $res;
     }
 
+    private function parsePageOrder(string $order): array
+    {
+        $parts = array_filter(array_map('trim', explode(',', $order)));
+        $pages = [];
+        foreach ($parts as $part) {
+            if (!ctype_digit($part)) {
+                return [];
+            }
+            $pages[] = (int) $part;
+        }
+
+        return $pages;
+    }
+
     private function expandPages(array $ranges): array
     {
         $pages = [];
@@ -515,11 +674,22 @@ final class DocumentProcessorService
 
     private function pageCount(string $pdf): int
     {
+        if (($this->tools['pdfinfo']['available'] ?? false) === true) {
+            $cmd = implode(' ', [
+                $this->bin('pdfinfo'),
+                escapeshellarg($pdf),
+            ]);
+            $run = $this->run($cmd);
+            if ($run['ok'] && preg_match('/Pages:\s*(\d+)/i', (string) ($run['stdout'] ?? ''), $m) === 1) {
+                return (int) $m[1];
+            }
+        }
+
         $cmd = implode(' ', [
             $this->bin('ghostscript'),
             '-q -dNODISPLAY',
             '-c',
-            escapeshellarg('(' . $pdf . ') (r) file runpdfbegin pdfpagecount = quit'),
+            escapeshellarg('(' . $this->escapePostScriptString($pdf) . ') (r) file runpdfbegin pdfpagecount = quit'),
         ]);
 
         $run = $this->run($cmd);
@@ -528,5 +698,38 @@ final class DocumentProcessorService
         }
 
         return (int) preg_replace('/[^0-9]/', '', $run['stdout']);
+    }
+
+    private function isPdfEncrypted(string $pdf): bool
+    {
+        if (($this->tools['pdfinfo']['available'] ?? false) === true) {
+            $cmd = implode(' ', [
+                $this->bin('pdfinfo'),
+                escapeshellarg($pdf),
+            ]);
+            $run = $this->run($cmd);
+            $combined = strtolower((string) (($run['stdout'] ?? '') . ' ' . ($run['stderr'] ?? '')));
+            if (preg_match('/encrypted:\s*yes/i', (string) ($run['stdout'] ?? '')) === 1) {
+                return true;
+            }
+            if (str_contains($combined, 'password')) {
+                return true;
+            }
+        }
+
+        $cmd = implode(' ', [
+            $this->bin('ghostscript'),
+            '-q -dNODISPLAY',
+            '-c',
+            escapeshellarg('(' . $this->escapePostScriptString($pdf) . ') (r) file runpdfbegin pdfpagecount = quit'),
+        ]);
+        $run = $this->run($cmd);
+        $combined = strtolower((string) (($run['stdout'] ?? '') . ' ' . ($run['stderr'] ?? '')));
+        return str_contains($combined, 'password') || str_contains($combined, 'encrypted');
+    }
+
+    private function escapePostScriptString(string $value): string
+    {
+        return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $value);
     }
 }
